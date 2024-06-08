@@ -5,7 +5,9 @@ import {
   generateToken,
   generateRefreshToken,
   verifyRefreshToken,
+  verifyToken,
 } from "../utils/jwt";
+import { sendResetPasswordEmail } from "../utils/send-email";
 
 const SALT_ROUNDS = 10;
 
@@ -36,6 +38,7 @@ export const signupUser = async (
     const userObj = user.toObject();
     delete userObj.password;
 
+    console.log(`User Signed Up: ${userObj}`);
     res
       .status(201)
       .json({ message: "User signed up successfully", user: userObj });
@@ -90,4 +93,44 @@ export const refreshToken = async (
       error instanceof Error ? error.message : "Invalid refresh token";
     res.status(401).json({ message });
   }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(404).json({ message: "The email is not registered" });
+  }
+
+  const token = generateToken(user.id);
+
+  await sendResetPasswordEmail(email, token);
+  console.log(`Email sent to ${email}`);
+  res.status(200).json({ message: "Password reset email sent" });
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+  let decodedToken;
+
+  try {
+    decodedToken = verifyToken(token);
+  } catch (err) {
+    return res.status(400).json({ message: "Invalid or expired token" });
+  }
+
+  const user = await User.findById(decodedToken?.userId);
+
+  if (!user) {
+    return res.status(400).json({ message: "Invalid or expired Token" });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  user.password = hashedPassword;
+
+  const userIns: IUser = new User(user);
+  await userIns.save();
+  console.log("Password Reset Successful");
+  res.status(200).json({ message: "Password reset successful" });
 };
