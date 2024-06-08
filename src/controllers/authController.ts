@@ -14,7 +14,7 @@ export const signupUser = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { name, email, password, profile_image } = req.body;
+    const { name, email, password, role, profile_image } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -27,11 +27,18 @@ export const signupUser = async (
       name,
       email,
       password: hashedPassword,
+      role,
       profile_image: profile_image || "",
     });
     await user.save();
 
-    res.status(201).json(user);
+    // Omit password property
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res
+      .status(201)
+      .json({ message: "User signed up successfully", user: userObj });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Server error occurred";
@@ -45,13 +52,13 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(400).json({ message: "Invalid email or password" });
+      res.status(400).json({ message: "The email is not registered" });
       return;
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      res.status(400).json({ message: "Invalid email or password" });
+      res.status(400).json({ message: "Incorrect Password" });
       return;
     }
 
